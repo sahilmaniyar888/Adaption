@@ -46,6 +46,7 @@ ValidationStatus = Literal[
     "source_extracted_unverified_native_review_pending",
     "llm_adapted_eyescan_reviewed",
     "llm_adapted_unreviewed",
+    "llm_adapted_quality_questionable",
     "native_validated",
 ]
 
@@ -125,11 +126,17 @@ class BharatCRICRow(BaseModel):
     source_corpus: Optional[str] = None
     extraction_method: Optional[ExtractionMethod] = None  # type: ignore[assignment]
     source_quality: Optional[SourceQuality] = None  # type: ignore[assignment]
-    generation_method: Literal["source"] = "source"
+    generation_method: Literal["source", "llm_adapted"] = "source"
     instruction_type: Optional[InstructionType] = None  # type: ignore[assignment]
     quality_flag: Optional[QualityFlag] = None  # type: ignore[assignment]
     seed_score: Optional[float] = Field(None, ge=0.0, le=1.0)
     actionability_score: Optional[float] = Field(None, ge=0.0, le=1.0)
+    
+    # Day 3 additions
+    adaption_job_id: Optional[str] = None
+    eyescan_verdict: Optional[Literal["pass", "fail", "fix", "cant_judge"]] = None
+    eyescan_reviewer_id: Optional[str] = None
+    eyescan_notes: Optional[str] = None
 
     @field_validator("instruction")
     @classmethod

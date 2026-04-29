@@ -129,6 +129,19 @@ def validate_no_invented_schemes(row: BharatCRICRow) -> Tuple[bool, Optional[str
     return False, "scheme-shaped phrase without a validated scheme name"
 
 
+def validate_no_fabricated_geography(row: BharatCRICRow) -> Tuple[bool, Optional[str]]:
+    """Flag rows that contain placeholders indicating hallucinated locations or generic templates."""
+    text = row.completion + " " + row.instruction
+    placeholders = [
+        "[city]", "[district]", "[state]", "[location]", "[name]",
+        "xyz", "12345", "your city", "your district"
+    ]
+    for p in placeholders:
+        if p in text.lower():
+            return False, f"fabricated geography or placeholder found: {p}"
+    return True, None
+
+
 def validate_row(row: BharatCRICRow) -> ValidationResult:
     errors: List[str] = []
     warnings: List[str] = []
@@ -149,9 +162,13 @@ def validate_row(row: BharatCRICRow) -> ValidationResult:
             f"unverified helpline-shaped numbers in completion: {invalid}"
         )
 
-    ok_schemes, scheme_msg = validate_no_invented_schemes(row)
+    ok_schemes, err_scheme = validate_no_invented_schemes(row)
     if not ok_schemes:
-        errors.append(f"hallucinated-scheme guard: {scheme_msg}")
+        errors.append(f"hallucinated-scheme guard: {err_scheme}")
+
+    ok_geo, err_geo = validate_no_fabricated_geography(row)
+    if not ok_geo:
+        warnings.append(f"geography-hallucination guard: {err_geo}")
 
     declared = set(row.helplines_mentioned)
     discovered = set(find_valid_helplines(row.completion))
