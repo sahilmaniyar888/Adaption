@@ -1,0 +1,31 @@
+[project]
+name = "adaption-isl-medical"
+version = "0.1.0"
+description = "ISL Medical Instruction-Tuning dataset for the Adaption Uncharted Data Challenge"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pydantic>=2.6",
+    "huggingface-hub>=0.24",
+    "datasets>=2.20",
+    "adaption>=0.1",
+    "tqdm>=4.66",
+    "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+cv = [
+    "mediapipe>=0.10.14",
+    "opencv-python>=4.10",
+    "numpy>=1.26",
+]
+
+[project.scripts]
+isl-build = "main:cli"
+
+[tool.setuptools.packages.find]
+include = ["isl_dataset*"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
