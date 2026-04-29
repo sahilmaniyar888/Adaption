@@ -142,6 +142,36 @@ def validate_no_fabricated_geography(row: BharatCRICRow) -> Tuple[bool, Optional
     return True, None
 
 
+def validate_no_invented_urls(row: BharatCRICRow) -> Tuple[bool, Optional[str]]:
+    """Flag any URL in genuine completion not in an allowlist."""
+    if row.variant_type == "heat_scam" or (row.metadata_json or {}).get("intentional_scam_feature"):
+        return True, None
+    import re
+    urls = re.findall(r'http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\\(\\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', row.completion)
+    allowlist = ["gov.in", "nic.in", "mygov.in", "imd.gov.in", "ndma.gov.in"]
+    for u in urls:
+        if not any(domain in u for domain in allowlist):
+            return False, f"unverified URL found: {u}"
+    return True, None
+
+def validate_no_invented_amounts(row: BharatCRICRow) -> Tuple[bool, Optional[str]]:
+    """Flag specific monetary amounts in genuine rows."""
+    if row.variant_type == "heat_scam" or (row.metadata_json or {}).get("intentional_scam_feature"):
+        return True, None
+    import re
+    amounts = re.findall(r'(?:Rs\.?|₹|INR)\s*\d+(?:,\d+)*(?:\s*lakh|\s*crore)?', row.completion, re.IGNORECASE)
+    if amounts:
+        return False, f"monetary amount found in genuine row: {amounts[0]}"
+    return True, None
+
+def validate_temporal_consistency(row: BharatCRICRow) -> Tuple[bool, Optional[str]]:
+    """Flag dates/years outside 2024-2026."""
+    import re
+    years = re.findall(r'\b(201\d|202[0-3]|202[7-9])\b', row.completion)
+    if years:
+        return False, f"stale or future year found: {years[0]}"
+    return True, None
+
 def validate_row(row: BharatCRICRow) -> ValidationResult:
     errors: List[str] = []
     warnings: List[str] = []
@@ -169,6 +199,18 @@ def validate_row(row: BharatCRICRow) -> ValidationResult:
     ok_geo, err_geo = validate_no_fabricated_geography(row)
     if not ok_geo:
         warnings.append(f"geography-hallucination guard: {err_geo}")
+
+    ok_url, err_url = validate_no_invented_urls(row)
+    if not ok_url:
+        warnings.append(f"url-hallucination guard: {err_url}")
+        
+    ok_amt, err_amt = validate_no_invented_amounts(row)
+    if not ok_amt:
+        warnings.append(f"amount-hallucination guard: {err_amt}")
+        
+    ok_temp, err_temp = validate_temporal_consistency(row)
+    if not ok_temp:
+        warnings.append(f"temporal-hallucination guard: {err_temp}")
 
     declared = set(row.helplines_mentioned)
     discovered = set(find_valid_helplines(row.completion))

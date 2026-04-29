@@ -137,6 +137,12 @@ class BharatCRICRow(BaseModel):
     eyescan_verdict: Optional[Literal["pass", "fail", "fix", "cant_judge"]] = None
     eyescan_reviewer_id: Optional[str] = None
     eyescan_notes: Optional[str] = None
+    
+    # Day 4 additions
+    variant_type: Optional[Literal["genuine_advisory", "heat_scam"]] = None
+    scam_category: Optional[Literal["fake_relief_scheme", "fake_hospital", "fake_subsidy", "fake_water_tanker", "fake_ngo", "fake_employer_allowance"]] = None
+    pressure_tactic: Optional[List[Literal["urgency", "authority_impersonation", "fear", "scarcity", "reciprocity"]]] = None
+    correct_user_action: Optional[str] = None
 
     @field_validator("instruction")
     @classmethod
