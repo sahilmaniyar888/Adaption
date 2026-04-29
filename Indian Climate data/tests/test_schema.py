@@ -45,13 +45,13 @@ def test_script_must_match_language_olck_for_sat():
     assert row.script == "Olck"
 
 
-def test_english_gloss_required_for_non_english():
-    with pytest.raises(ValidationError) as exc:
-        BharatCRICRow(**_base_kwargs(
-            language="hin", script="Deva",
-            completion="गर्मी से बचें", english_gloss=None,
-        ))
-    assert "english_gloss is required" in str(exc.value)
+def test_english_gloss_allowed_missing_for_non_english():
+    """Day 2: english_gloss is recommended but not required per-row for non-English."""
+    row = BharatCRICRow(**_base_kwargs(
+        language="hin", script="Deva",
+        completion="गर्मी से बचें", english_gloss=None,
+    ))
+    assert row.english_gloss is None
 
 
 def test_english_gloss_forbidden_for_english():

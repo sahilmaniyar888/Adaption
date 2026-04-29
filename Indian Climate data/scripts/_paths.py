@@ -11,6 +11,7 @@ DATA_DIR = PROJECT_ROOT / "data"
 RAW_DIR = DATA_DIR / "raw"
 PROCESSED_DIR = DATA_DIR / "processed"
 SEED_DIR = DATA_DIR / "seed"
+REPORTS_DIR = PROJECT_ROOT / "reports"
 
 
 def ensure_on_path() -> None:

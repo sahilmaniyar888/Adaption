@@ -62,9 +62,9 @@ under-served Indian languages.
 ```bibtex
 @dataset{bharatcric_2026,
   title  = {BharatCRIC: Bharat Climate Resilience Instruction Corpus},
-  author = {Maniyar, Sahil},
+  author = {Maniyar Sahil},
   year   = {2026},
   doi    = {TBD-zenodo-doi},
-  note   = {Adaption Uncharted Data Challenge submission}
+  credit   = {Adaption data}
 }
 ```

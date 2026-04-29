@@ -2,6 +2,11 @@
 
 The model encodes every cross-field invariant we want enforced at write time so
 downstream loaders can trust the JSONL.
+
+Day 2 additions:
+  - source_corpus, extraction_method, source_quality, generation_method
+  - instruction_type for tracking diversity
+  - source_extracted_no_native_validation status
 """
 from __future__ import annotations
 
@@ -36,6 +41,7 @@ SurfaceFormat = Literal[
 
 ValidationStatus = Literal[
     "source_authentic",
+    "source_extracted_no_native_validation",
     "source_extracted_unverified_native_review_pending",
     "llm_adapted_eyescan_reviewed",
     "llm_adapted_unreviewed",
@@ -53,6 +59,26 @@ IntentLabel = Literal[
     "scam_alert",
     "scam_attempt",
     "general_information",
+]
+
+ExtractionMethod = Literal[
+    "scraped_html",
+    "scraped_pdf",
+    "hf_dataset_filter",
+    "research_paper_appendix",
+    "manual_curation",
+]
+
+SourceQuality = Literal["high", "medium", "low"]
+QualityFlag = Literal["high_confidence", "medium", "low"]
+
+InstructionType = Literal[
+    "translation",
+    "classification",
+    "qa",
+    "extraction",
+    "summarization",
+    "rewrite",
 ]
 
 LANGUAGE_TO_SCRIPT: Dict[str, str] = {
@@ -94,6 +120,14 @@ class BharatCRICRow(BaseModel):
     metadata_json: Optional[Dict[str, Any]] = None
     created_at: datetime = Field(default_factory=_now)
     adaption_recipes_applied: List[str] = Field(default_factory=list)
+    # Day 2 additions
+    source_corpus: Optional[str] = None
+    extraction_method: Optional[ExtractionMethod] = None  # type: ignore[assignment]
+    source_quality: Optional[SourceQuality] = None  # type: ignore[assignment]
+    generation_method: Literal["source"] = "source"
+    instruction_type: Optional[InstructionType] = None  # type: ignore[assignment]
+    quality_flag: Optional[QualityFlag] = None  # type: ignore[assignment]
+    seed_score: Optional[float] = Field(None, ge=0.0, le=1.0)
 
     @field_validator("instruction")
     @classmethod
@@ -109,9 +143,13 @@ class BharatCRICRow(BaseModel):
             if len(v) <= len("internal_curated:"):
                 raise ValueError("internal_curated reference must include a description")
             return v
+        if v.startswith("corpus:"):
+            if len(v) <= len("corpus:"):
+                raise ValueError("corpus reference must include a description")
+            return v
         if not re.match(r"^https?://", v):
             raise ValueError(
-                "source_reference must be a URL or 'internal_curated:{description}'"
+                "source_reference must be a URL, 'internal_curated:{description}', or 'corpus:{name}'"
             )
         return v
 
@@ -125,13 +163,12 @@ class BharatCRICRow(BaseModel):
                 f"(expected {expected_script!r})"
             )
 
-        # english_gloss required iff language != eng
+        # english_gloss forbidden for English rows
         if self.language == "eng" and self.english_gloss is not None:
             raise ValueError("english_gloss must be None when language == 'eng'")
-        if self.language != "eng" and (
-            self.english_gloss is None or not self.english_gloss.strip()
-        ):
-            raise ValueError("english_gloss is required when language != 'eng'")
+        # Day 2: english_gloss is RECOMMENDED for non-English rows but
+        # enforced at corpus level (≥70% coverage), not per-row.
+        # This allows source-extracted rows where parallel English is unavailable.
 
         # SMS length cap
         if self.surface_format == "sms":

@@ -1,0 +1,74 @@
+BharatCRIC Day 2 — Multilingual Seed Statistics
+==================================================
+
+Total rows: 750
+
+By language:
+  bho: 49
+  eng: 431
+  hin: 199
+  mai: 40
+  sat: 31
+
+Helpline grounding ratio: 34.67%
+Helpline target met: True
+
+Helpline grounding by language:
+  bho: 10.20%
+  eng: 50.12%
+  hin: 16.58%
+  mai: 7.50%
+  sat: 9.68%
+
+Script consistency ratio: 100.00%
+English gloss coverage (non-English): 100.00%
+Instruction diversity ratio: 48.90%
+
+By disaster_type:
+  disaster_scam_heat: 3
+  heatstroke_health: 21
+  heatwave: 667
+  vulnerable_population: 21
+  worker_safety: 38
+
+By surface_format:
+  community_post: 185
+  official_bulletin: 2
+  radio_script: 2
+  sms: 387
+  whatsapp: 174
+
+By validation_status:
+  source_authentic: 719
+  source_extracted_no_native_validation: 31
+
+By instruction_type:
+  classification: 59
+  extraction: 45
+  qa: 52
+  translation: 163
+  unspecified: 431
+
+By source_quality:
+  high: 199
+  medium: 120
+  unspecified: 431
+
+By source_host:
+  bh.wikipedia.org: 10
+  bsdma.org: 17
+  jsdma.jharkhand.gov.in: 6
+  mai.wikipedia.org: 8
+  mausam.imd.gov.in: 330
+  ndma.gov.in: 294
+  newsonair.com: 8
+  pib.gov.in: 39
+  sat.wikipedia.org: 6
+  sdmraj.rajasthan.gov.in: 8
+  upsdma.up.gov.in: 15
+  www.osdma.org: 9
+
+Duplicate row IDs: 0
+Near-duplicate pairs: 27
+Errors: 0
+Warnings: 7

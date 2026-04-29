@@ -9,7 +9,7 @@ import hashlib
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from .helpline_registry import (
     extract_helpline_candidates,
@@ -68,6 +68,13 @@ class CorpusReport:
     near_duplicate_pairs: List[Tuple[str, str]] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
+    # Day 2 metrics
+    helpline_grounding_by_lang: Dict[str, float] = field(default_factory=dict)
+    script_consistency_ratio: float = 1.0
+    english_gloss_coverage: float = 1.0
+    by_instruction_type: Dict[str, int] = field(default_factory=dict)
+    by_source_quality: Dict[str, int] = field(default_factory=dict)
+    instruction_diversity_ratio: float = 1.0
 
     def as_dict(self) -> Dict:
         return {
@@ -85,6 +92,13 @@ class CorpusReport:
             "near_duplicate_pairs": list(self.near_duplicate_pairs),
             "errors": list(self.errors),
             "warnings": list(self.warnings),
+            # Day 2 metrics
+            "helpline_grounding_by_lang": dict(self.helpline_grounding_by_lang),
+            "script_consistency_ratio": round(self.script_consistency_ratio, 4),
+            "english_gloss_coverage": round(self.english_gloss_coverage, 4),
+            "by_instruction_type": dict(self.by_instruction_type),
+            "by_source_quality": dict(self.by_source_quality),
+            "instruction_diversity_ratio": round(self.instruction_diversity_ratio, 4),
         }
 
 
@@ -263,4 +277,162 @@ def validate_corpus(rows: Iterable[BharatCRICRow],
     if near_dups:
         report.warnings.append(f"{len(near_dups)} near-duplicate pairs (J>={near_dup_threshold})")
 
+    # ---- Day 2 metrics ----
+
+    # Per-language helpline grounding
+    lang_helpline: Dict[str, int] = defaultdict(int)
+    lang_total: Dict[str, int] = defaultdict(int)
+    for row in rows:
+        lang_total[row.language] += 1
+        if find_valid_helplines(row.completion):
+            lang_helpline[row.language] += 1
+    report.helpline_grounding_by_lang = {
+        k: (lang_helpline[k] / v if v else 0.0) for k, v in lang_total.items()
+    }
+
+    # Script consistency
+    from .schema import LANGUAGE_TO_SCRIPT
+    script_ok = sum(
+        1 for r in rows
+        if LANGUAGE_TO_SCRIPT.get(r.language) == r.script
+    )
+    report.script_consistency_ratio = script_ok / len(rows) if rows else 1.0
+    if report.script_consistency_ratio < 0.95:
+        report.errors.append(
+            f"script consistency {report.script_consistency_ratio:.2%} < 95%"
+        )
+
+    # English gloss coverage (non-English rows)
+    non_eng = [r for r in rows if r.language != "eng"]
+    if non_eng:
+        gloss_present = sum(1 for r in non_eng
+                           if r.english_gloss and r.english_gloss.strip())
+        report.english_gloss_coverage = gloss_present / len(non_eng)
+        if report.english_gloss_coverage < 0.70:
+            report.warnings.append(
+                f"english_gloss coverage {report.english_gloss_coverage:.2%} "
+                f"< recommended 70%"
+            )
+    else:
+        report.english_gloss_coverage = 1.0
+
+    # Instruction type distribution
+    itype = Counter()
+    for r in rows:
+        if r.instruction_type:
+            itype[r.instruction_type] += 1
+        else:
+            itype["unspecified"] += 1
+    report.by_instruction_type = dict(itype)
+
+    # Instruction diversity: % of non-English rows that are non-translation
+    if non_eng:
+        non_translation = sum(
+            1 for r in non_eng
+            if r.instruction_type and r.instruction_type != "translation"
+        )
+        report.instruction_diversity_ratio = non_translation / len(non_eng)
+    else:
+        report.instruction_diversity_ratio = 1.0
+
+    # Source quality distribution
+    squal = Counter()
+    for r in rows:
+        if r.source_quality:
+            squal[r.source_quality] += 1
+        else:
+            squal["unspecified"] += 1
+    report.by_source_quality = dict(squal)
+
+    # Domain keyword validation
+    for r in rows:
+        if r.language != "eng":
+            ok, msg = validate_domain_keywords(r)
+            if not ok:
+                report.warnings.append(f"row {r.row_id}: {msg}")
+
+    # Santali Devanagari leakage check
+    for r in rows:
+        if r.language == "sat":
+            ok, msg = validate_no_devanagari_leakage(r)
+            if not ok:
+                report.warnings.append(f"row {r.row_id}: {msg}")
+
     return report
+
+
+# ---------------------- Day 2 row-level validators --------------------------
+
+
+# Domain keywords for filtering non-English extracts
+DOMAIN_KEYWORDS_EN = {
+    "heat", "heatwave", "temperature", "sun", "shade", "water", "hydration",
+    "dehydration", "ors", "heatstroke", "summer", "hot", "cool", "safety",
+    "precaution", "ambulance", "hospital", "emergency", "helpline",
+}
+DOMAIN_KEYWORDS_DEVA = {
+    "लू", "गर्मी", "धूप", "पानी", "तापमान", "लू चलना", "गरमी",
+    "ठंडा", "छाया", "ओआरएस", "अस्पताल", "सूरज", "बचाव",
+    "स्वास्थ्य", "सावधानी", "हीटवेव", "उपचार", "पीना",
+}
+DOMAIN_KEYWORDS_OLCK = {
+    "ᱦᱟᱯᱨᱟᱢ", "ᱫᱟᱜ", "ᱵᱤᱱ", "ᱨᱚᱜ", "ᱥᱮᱸᱫᱨᱟ",
+}
+
+
+def validate_domain_keywords(row: BharatCRICRow) -> Tuple[bool, Optional[str]]:
+    """Check that non-English rows contain at least one domain keyword."""
+    if row.language == "eng":
+        return True, None
+    text = (row.completion + " " + row.instruction).lower()
+    if row.script == "Deva":
+        keywords = DOMAIN_KEYWORDS_DEVA | DOMAIN_KEYWORDS_EN
+    elif row.script == "Olck":
+        keywords = DOMAIN_KEYWORDS_OLCK | DOMAIN_KEYWORDS_EN
+    else:
+        keywords = DOMAIN_KEYWORDS_EN
+    for kw in keywords:
+        if kw.lower() in text:
+            return True, None
+    return False, "no domain-relevant keyword found in completion+instruction"
+
+
+def validate_no_devanagari_leakage(row: BharatCRICRow) -> Tuple[bool, Optional[str]]:
+    """For Santali (Ol Chiki) rows, ensure Devanagari characters are <10%."""
+    if row.language != "sat":
+        return True, None
+    text = row.completion
+    if not text:
+        return True, None
+    deva_count = sum(1 for ch in text if '\u0900' <= ch <= '\u097F')
+    ratio = deva_count / len(text) if text else 0
+    if ratio >= 0.10:
+        return False, f"Devanagari leakage {ratio:.1%} >= 10% in Santali row"
+    return True, None
+
+
+def validate_olchiki_coverage(row: BharatCRICRow) -> Tuple[bool, Optional[str]]:
+    """For Santali rows, check ≥80% Ol Chiki Unicode (U+1C50-U+1C7F)."""
+    if row.language != "sat":
+        return True, None
+    text = row.completion
+    if not text:
+        return True, None
+    olck_count = sum(1 for ch in text if '\u1C50' <= ch <= '\u1C7F')
+    # Only count actual characters, not whitespace/punctuation
+    alpha_chars = sum(1 for ch in text if not ch.isspace() and not ch in '.,;:!?()-')
+    if alpha_chars == 0:
+        return True, None
+    ratio = olck_count / alpha_chars
+    if ratio < 0.80:
+        return False, f"Ol Chiki coverage {ratio:.1%} < 80%"
+    return True, None
+
+
+def validate_script_consistency(row: BharatCRICRow) -> Tuple[bool, Optional[str]]:
+    """Verify script field matches language per LANGUAGE_TO_SCRIPT mapping."""
+    from .schema import LANGUAGE_TO_SCRIPT
+    expected = LANGUAGE_TO_SCRIPT.get(row.language)
+    if expected and row.script != expected:
+        return False, f"expected script {expected} for {row.language}, got {row.script}"
+    return True, None
