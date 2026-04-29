@@ -41,6 +41,7 @@ SurfaceFormat = Literal[
 
 ValidationStatus = Literal[
     "source_authentic",
+    "source_authentic_enriched",
     "source_extracted_no_native_validation",
     "source_extracted_unverified_native_review_pending",
     "llm_adapted_eyescan_reviewed",
@@ -128,6 +129,7 @@ class BharatCRICRow(BaseModel):
     instruction_type: Optional[InstructionType] = None  # type: ignore[assignment]
     quality_flag: Optional[QualityFlag] = None  # type: ignore[assignment]
     seed_score: Optional[float] = Field(None, ge=0.0, le=1.0)
+    actionability_score: Optional[float] = Field(None, ge=0.0, le=1.0)
 
     @field_validator("instruction")
     @classmethod

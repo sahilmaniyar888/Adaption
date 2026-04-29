@@ -34,6 +34,10 @@ def main(path: str | None = None) -> None:
     by_intent = Counter()
     by_itype = Counter()
     by_squality = Counter()
+    helpline_types = Counter()
+    format_lengths = defaultdict(list)
+    tokens_by_lang = defaultdict(Counter)
+    
     helpline_count = 0
     helpline_by_lang = defaultdict(int)
     lang_total = defaultdict(int)
@@ -65,9 +69,20 @@ def main(path: str | None = None) -> None:
             if row.get("helplines_mentioned"):
                 helpline_count += 1
                 helpline_by_lang[lang] += 1
+                for hl in row["helplines_mentioned"]:
+                    helpline_types[hl] += 1
 
             if LANG_SCRIPT.get(lang) == row.get("script"):
                 script_ok += 1
+                
+            # Collect lengths
+            format_lengths[row["surface_format"]].append(len(row["completion"]))
+            
+            # Collect tokens
+            import re
+            words = [w for w in re.findall(r"\w+", row["completion"].lower()) if len(w) > 2]
+            for w in words:
+                tokens_by_lang[lang][w] += 1
 
             if lang != "eng":
                 non_eng_total += 1
@@ -104,8 +119,22 @@ def main(path: str | None = None) -> None:
         ratio = helpline_by_lang[lang] / lang_total[lang] if lang_total[lang] else 0
         print(f"  {lang}: {helpline_by_lang[lang]}/{lang_total[lang]} ({ratio:.1%})")
     print()
-    print("by instruction_type       :", dict(by_itype))
     print("by source_quality         :", dict(by_squality))
+    print()
+    print("--- Detailed Distributions ---")
+    print("helpline types            :", dict(helpline_types))
+    print("avg completion length by format:")
+    for fmt, lengths in format_lengths.items():
+        avg = sum(lengths) / len(lengths) if lengths else 0
+        print(f"  {fmt}: {avg:.1f} chars (from {len(lengths)} rows)")
+    print()
+    print("Top 10 tokens by language:")
+    for lang, counter in tokens_by_lang.items():
+        top = counter.most_common(10)
+        try:
+            print(f"  {lang}: {top}")
+        except UnicodeEncodeError:
+            print(f"  {lang}: [contains unprintable characters]")
 
 
 if __name__ == "__main__":

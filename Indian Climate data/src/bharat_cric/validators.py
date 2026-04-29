@@ -138,6 +138,11 @@ def validate_row(row: BharatCRICRow) -> ValidationResult:
             f"sms completion length {len(row.completion)} > {SMS_MAX_CHARS}"
         )
 
+    # Santali Devanagari leakage check (Hard Fail)
+    if row.language == "sat":
+        if re.search(r'[\u0900-\u097F]', row.completion):
+            errors.append("Santali completion contains Devanagari characters")
+
     ok_helplines, invalid = validate_helplines(row)
     if not ok_helplines:
         errors.append(
